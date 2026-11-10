@@ -1,0 +1,74 @@
+name: Playwright Sharded Execution
+on:
+  workflow_dispatch: # Allows manual execution
+
+jobs:
+  # JOB 1: Run tests in parallel shards
+  run-tests:
+    name: "Test Shard ${{ matrix.shard }}/3"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # Don't cancel other shards if one shard fails
+      matrix:
+        shard: [1, 2, 3] # This creates 3 parallel runner jobs
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: lts/*
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Install Playwright Browsers
+      run: npx playwright install --with-deps
+
+    # Playwright built-in sharding logic execution
+    - name: Execute Test Shard
+      run: npx playwright test --shard=${{ matrix.shard }}/3
+      
+    # Save the special intermediate blob report (NOT the standard HTML report)
+    - name: Upload Blob Report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: all-blob-reports-shard-${{ matrix.shard }}
+        path: blob-report/
+        retention-days: 1
+
+  # JOB 2: Combine all shard results into a single dashboard
+  merge-reports:
+    name: "Merge Shard Reports"
+    needs: run-tests # Wait until all test shards finish
+    if: always()     # Execute even if a test failed in the previous job
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: lts/*
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+
+    # Download all separate blob reports into one folder
+    - name: Download all Shard Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: merged-blob-reports
+        pattern: all-blob-reports-shard-*
+        merge-multiple: true
+
+    # Playwright stitches the blob files into a clean final HTML report
+    - name: Merge Reports into HTML
+      run: npx playwright merge-reports --reporter html ./merged-blob-reports
+
+    # Upload your ultimate single test report
+    - name: Upload Final HTML Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: final-playwright-html-report
+        path: playwright-report/
+        retention-days: 7
