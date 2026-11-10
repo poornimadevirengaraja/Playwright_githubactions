@@ -73,7 +73,7 @@ jobs:
       - run: echo "${{ inputs.message }}"
 
   TriggerJob:
-    uses: ./.github/workflows/onworkflowcall-example.yml
+    uses: ./.github/workflows/onworkflowcall-reusable.yml
     with:
       environment: ${{ inputs.environment }}
       message: ${{ inputs.message }}
